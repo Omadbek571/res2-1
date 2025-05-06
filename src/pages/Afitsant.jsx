@@ -1,34 +1,36 @@
-// pages/Afitsant.jsx (Vaqt, Yashil tugma va Saboy funksiyasi qo'shilgan)
+// pages/Afitsant.jsx (Saboy tahrirlash imkoniyati bilan)
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { FiBell, FiArrowLeft, FiShoppingBag } from 'react-icons/fi'; // FiShoppingBag qo'shildi
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { FiBell, FiArrowLeft, FiShoppingBag } from 'react-icons/fi';
 
-// Define Categories
-const CATEGORIES = {
+const CATEGORIES = { /* ... avvalgidek ... */
   MILLIY: 'milliy',
   FAST_FOOD: 'fast',
   BAR: 'bar',
   ALL: 'all'
 };
-
-// Define Order Type Identifier
 const ORDER_TYPE_SABOY = 'Saboy'; // Olib ketish uchun identifikator
+const LOCAL_STORAGE_SABOY_ORDERS = 'saboyOrdersData';
+const LOCAL_STORAGE_BOOKED_TABLES = 'bookedTablesData';
+
 
 function Afitsant() {
-  // --- State ---
   const [order, setOrder] = useState([]);
   const [totalAmount, setTotalAmount] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState(CATEGORIES.ALL);
   const [hideUnavailable, setHideUnavailable] = useState(false);
-  const [isSaboyMode, setIsSaboyMode] = useState(false); // Yangi state: Saboy rejimi uchun
+  const [isSaboyMode, setIsSaboyMode] = useState(false);
+  const [isEditingMode, setIsEditingMode] = useState(false);
+  const [editingOrderType, setEditingOrderType] = useState(null); // 'table' | 'saboy' | null
+  const [editingOrderId, setEditingOrderId] = useState(null); // Tahrirlanayotgan buyurtma IDsi
+  const [currentWaiterName, setCurrentWaiterName] = useState('Rustamov Jasur');
 
-  // --- Routing Hooks ---
-  const { tableNumber } = useParams();
+  const { tableNumber: routeTableIdentifier } = useParams(); // Stol raqami yoki boshqa identifikator
   const navigate = useNavigate();
+  const location = useLocation();
 
-  // --- Data ---
-    const originalMenuItems = [
+  const originalMenuItems = [ /* ... avvalgidek ... */
       { id: 'lag', name: 'Lagmon', price: 22000, available: true, category: CATEGORIES.MILLIY },
       { id: 'man', name: 'Manti', price: 5000, available: true, category: CATEGORIES.MILLIY },
       { id: 'mas', name: 'Mastava', price: 25000, available: true, category: CATEGORIES.MILLIY },
@@ -46,21 +48,47 @@ function Afitsant() {
       { id: 'choy', name: 'Choy', price: 3000, available: true, category: CATEGORIES.BAR },
     ];
 
-  // --- Static Data ---
-  const waiterName = 'Rustamov Jasur';
-
-  // --- Helper Functions ---
   const formatPrice = (price) => price.toLocaleString('fr-FR').replace(/ /g, '.');
-
-  const getCurrentTimestamp = () => {
+  const getCurrentTimestamp = () => { /* ... avvalgidek ... */
       const now = new Date();
       const date = now.toLocaleDateString('ru-RU');
       const time = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
       return `${date}/${time}`;
   };
 
-  // --- Event Handlers ---
-  const handleAddItem = (menuItem) => {
+  useEffect(() => {
+    const stateData = location.state;
+    if (stateData?.isEditing && stateData?.existingOrderData) {
+      const { items, waiterName: existingWaiter, id, tableNumber } = stateData.existingOrderData;
+      const type = stateData.editingOrderType; // 'table' yoki 'saboy' bo'lishi kerak
+
+      setOrder(items || []);
+      setCurrentWaiterName(existingWaiter || 'Noma`lum Ofitsiant');
+      setIsEditingMode(true);
+      setEditingOrderType(type);
+      setEditingOrderId(id); // Buyurtma ID sini saqlash
+
+      if (type === 'saboy') {
+        setIsSaboyMode(true); // Saboy tahrirlanayotganda Saboy rejimini yoqish
+      } else {
+        setIsSaboyMode(false); // Stol tahrirlanayotganda Saboy rejimi o'chiriladi
+      }
+    } else {
+      // Yangi buyurtma yoki oddiy rejim
+      setOrder([]);
+      setCurrentWaiterName('Rustamov Jasur'); // Default
+      setIsEditingMode(false);
+      setEditingOrderType(null);
+      setEditingOrderId(null);
+      // Agar URL da stol raqami bo'lmasa va Saboy tugmasi bosilmagan bo'lsa,
+      // isSaboyMode ni false qilish kerak (yoki default holatiga qarab).
+      // Hozirgi logikada Saboy tugmasi bosilganda isSaboyMode true bo'ladi.
+      // Yangi buyurtma uchun, agar routeTableIdentifier bo'lmasa, Saboy default bo'lishi mumkin
+      // setIsSaboyMode(!routeTableIdentifier); // Buni kerak bo'lsa qo'shish mumkin
+    }
+  }, [location.state, routeTableIdentifier]);
+
+  const handleAddItem = (menuItem) => { /* ... avvalgidek ... */
     if (!menuItem.available) return;
     setOrder(prevOrder => {
       const existingItem = prevOrder.find(item => item.id === menuItem.id);
@@ -73,20 +101,20 @@ function Afitsant() {
           id: menuItem.id,
           name: menuItem.name,
           price: menuItem.price,
-          quantity: 1
+          quantity: 1,
+          category: menuItem.category
         }];
       }
     });
   };
-
-  const handleIncrementQuantity = (itemId) => {
+  const handleIncrementQuantity = (itemId) => { /* ... avvalgidek ... */
       setOrder(prevOrder =>
         prevOrder.map(item =>
           item.id === itemId ? { ...item, quantity: item.quantity + 1 } : item
         )
       );
   };
-  const handleDecrementQuantity = (itemId) => {
+  const handleDecrementQuantity = (itemId) => { /* ... avvalgidek ... */
      setOrder(prevOrder => {
        const existingItem = prevOrder.find(item => item.id === itemId);
        if (existingItem && existingItem.quantity > 1) {
@@ -100,44 +128,126 @@ function Afitsant() {
   };
   const handleSearchChange = (event) => { setSearchTerm(event.target.value); };
   const handleCategorySelect = (category) => { setSelectedCategory(category); };
+
   const goToTables = () => {
-      // Saboy rejimini o'chiramiz, agar stollarga qaytsak
+      // Reset all modes before going to tables
       setIsSaboyMode(false);
+      setIsEditingMode(false);
+      setEditingOrderType(null);
+      setEditingOrderId(null);
       navigate('/tables');
   };
   const handleHideUnavailableToggle = () => { setHideUnavailable(prevValue => !prevValue); };
 
-  // Saboy rejimini yoqish/o'chirish
   const handleSaboyToggle = () => {
-      setIsSaboyMode(prev => !prev); // Hozirgi holatni teskarisiga o'zgartiradi
+      // Agar stol buyurtmasi tahrirlanayotgan bo'lsa, Saboy'ga o'tishni bloklash
+      if (isEditingMode && editingOrderType === 'table') return;
+
+      setIsSaboyMode(prev => {
+          const newSaboyMode = !prev;
+          if (newSaboyMode) {
+              // Saboy rejimiga o'tganda, agar stol tahrirlanayotgan bo'lmasa,
+              // tahrirlash rejimini o'chirish va buyurtmani tozalash (yangi saboy uchun)
+              if (!(isEditingMode && editingOrderType === 'saboy')) {
+                  setIsEditingMode(false);
+                  setEditingOrderType(null);
+                  setEditingOrderId(null);
+                  setOrder([]);
+              }
+          } else {
+              // Saboy rejimidan chiqqanda (agar stol raqami bo'lsa, stol rejimiga o'tadi)
+              // Agar saboy tahrirlanayotgan bo'lsa, bu tugma bosilmasligi kerak (disabled orqali)
+          }
+          return newSaboyMode;
+      });
   };
 
-  // Buyurtmani state bilan yuborish (Saboy logikasi qo'shilgan)
   const handleOrderSubmit = () => {
     if (order.length === 0) return;
 
-    // Buyurtma identifikatorini aniqlash (Stol yoki Saboy)
-    const orderIdentifier = isSaboyMode ? ORDER_TYPE_SABOY : (tableNumber || 'Noma`lum');
+    let orderIdentifier;
+    let finalWaiterName = currentWaiterName;
+
+    if (isEditingMode && editingOrderType === 'saboy') {
+        orderIdentifier = ORDER_TYPE_SABOY; // Yoki editingOrderId dan foydalanish mumkin
+    } else if (isSaboyMode) {
+        orderIdentifier = ORDER_TYPE_SABOY;
+    } else if (routeTableIdentifier) {
+        orderIdentifier = routeTableIdentifier;
+    } else {
+        orderIdentifier = 'Noma`lum';
+    }
 
     const submittedOrderData = {
-      id: Date.now().toString(),
-      tableNumber: orderIdentifier, // Stol raqami yoki 'Saboy'
-      waiterName: waiterName,
+      // ID ni localStorage ga saqlashda hal qilinadi (yangi yoki mavjud)
+      tableNumber: orderIdentifier, // Bu "Saboy" yoki stol raqami bo'lishi mumkin
+      waiterName: finalWaiterName,
       items: order,
       totalAmount: totalAmount,
       timestamp: getCurrentTimestamp(),
-      status: 'pending'
+      status: isEditingMode ? 'updated' : 'pending',
     };
+
+    // --- localStorage ni yangilash ---
+    try {
+        if (isEditingMode && editingOrderType === 'saboy') { // Mavjud Saboy buyurtmasini yangilash
+            const storedSaboyOrdersRaw = localStorage.getItem(LOCAL_STORAGE_SABOY_ORDERS);
+            let storedSaboyOrders = storedSaboyOrdersRaw ? JSON.parse(storedSaboyOrdersRaw) : [];
+            storedSaboyOrders = storedSaboyOrders.map(ord =>
+                ord.id === editingOrderId ? { ...submittedOrderData, id: editingOrderId } : ord
+            );
+            localStorage.setItem(LOCAL_STORAGE_SABOY_ORDERS, JSON.stringify(storedSaboyOrders));
+            submittedOrderData.id = editingOrderId; // ID ni yuboriladigan ma'lumotga qo'shish
+        } else if (isSaboyMode) { // Yangi Saboy buyurtmasi
+            const storedSaboyOrdersRaw = localStorage.getItem(LOCAL_STORAGE_SABOY_ORDERS);
+            let storedSaboyOrders = storedSaboyOrdersRaw ? JSON.parse(storedSaboyOrdersRaw) : [];
+            const newSaboyId = `saboy-${Date.now()}`;
+            submittedOrderData.id = newSaboyId;
+            storedSaboyOrders.push(submittedOrderData);
+            localStorage.setItem(LOCAL_STORAGE_SABOY_ORDERS, JSON.stringify(storedSaboyOrders));
+        } else if (routeTableIdentifier) { // Stol buyurtmasi (yangi yoki tahrirlash)
+            const storedTablesRaw = localStorage.getItem(LOCAL_STORAGE_BOOKED_TABLES);
+            let storedTables = storedTablesRaw ? JSON.parse(storedTablesRaw) : [];
+            const tableNumInt = parseInt(routeTableIdentifier);
+            const existingTableIndex = storedTables.findIndex(tbl => tbl.tableNumber === tableNumInt);
+
+            if (isEditingMode && editingOrderType === 'table' && existingTableIndex > -1) { // Mavjud stolni yangilash
+                storedTables[existingTableIndex] = {
+                    ...storedTables[existingTableIndex],
+                    orderItems: order,
+                    waiterName: finalWaiterName,
+                };
+                submittedOrderData.id = storedTables[existingTableIndex].id || `table-${tableNumInt}-${Date.now()}`;
+            } else if (!isEditingMode && existingTableIndex === -1) { // Yangi band stol qo'shish (agar Tables.jsx da bo'lmasa)
+                // Bu qism Tables.jsx bilan sinxron ishlashi uchun murakkabroq logika talab qilishi mumkin.
+                // Hozircha, faqat `Orders` sahifasi uchun ma'lumot yuboramiz.
+                // Tables.jsx ga yangi band stol qo'shish uchun alohida mexanizm kerak.
+                 submittedOrderData.id = `table-new-${tableNumInt}-${Date.now()}`;
+                 // Agar yangi stolni `bookedTablesData` ga qo'shish kerak bo'lsa, bu yerda qo'shiladi.
+                 // Masalan:
+                 // const panel = ... (qaysi panelga tegishli ekanini aniqlash kerak)
+                 // storedTables.push({ tableNumber: tableNumInt, waiterName: finalWaiterName, panel: panel, orderItems: order, id: submittedOrderData.id });
+            } else if (!isEditingMode && existingTableIndex > -1) {
+                // Agar yashil stol tanlanib, lekin u allaqachon 'bookedTablesData' da (bo'sh buyurtma bilan) mavjud bo'lsa
+                 storedTables[existingTableIndex].orderItems = order;
+                 storedTables[existingTableIndex].waiterName = finalWaiterName;
+                 submittedOrderData.id = storedTables[existingTableIndex].id || `table-${tableNumInt}-${Date.now()}`;
+            }
+             localStorage.setItem(LOCAL_STORAGE_BOOKED_TABLES, JSON.stringify(storedTables));
+        }
+    } catch (error) {
+        console.error("Error updating localStorage:", error);
+    }
+    // --- localStorage ni yangilash tugadi ---
+
     navigate('/orders', { state: { submittedOrder: submittedOrderData } });
   };
 
-  // --- Effects ---
-  useEffect(() => {
+  useEffect(() => { /* ... totalAmount hisoblash, o'zgarishsiz ... */
       const newTotal = order.reduce((sum, item) => sum + item.price * item.quantity, 0);
       setTotalAmount(newTotal);
   }, [order]);
 
-  // --- Filtering Logic ---
   const categoryFilteredItems = selectedCategory === CATEGORIES.ALL
     ? originalMenuItems
     : originalMenuItems.filter(item => item.category === selectedCategory);
@@ -147,67 +257,79 @@ function Afitsant() {
   const filteredMenuItems = hideUnavailable
     ? searchFilteredItems.filter(item => item.available === true)
     : searchFilteredItems;
-  const getCategoryButtonStyle = (category) => {
+  const getCategoryButtonStyle = (category) => { /* ... o'zgarishsiz ... */
       return selectedCategory === category ? 'ring-2 ring-offset-1 ring-blue-500' : '';
   };
 
-  // Joriy buyurtma uchun ko'rsatiladigan nom (Stol yoki Saboy)
-  const currentOrderDisplay = isSaboyMode ? ORDER_TYPE_SABOY : (tableNumber ? `${tableNumber}-Stol` : 'Stol?');
+  let currentOrderDisplay;
+  if (isEditingMode) {
+    if (editingOrderType === 'saboy') {
+        currentOrderDisplay = `${ORDER_TYPE_SABOY} (Tahrirlash)`;
+    } else if (editingOrderType === 'table' && routeTableIdentifier) {
+        currentOrderDisplay = `${routeTableIdentifier}-Stol (Tahrirlash)`;
+    } else {
+        currentOrderDisplay = "Tahrirlash...";
+    }
+  } else if (isSaboyMode) {
+    currentOrderDisplay = ORDER_TYPE_SABOY;
+  } else if (routeTableIdentifier) {
+    currentOrderDisplay = `${routeTableIdentifier}-Stol`;
+  } else {
+    currentOrderDisplay = 'Stol/Saboy?'; // Agar na stol, na saboy tanlanmagan bo'lsa
+  }
 
-  // --- JSX Return ---
+  const submitButtonText = isEditingMode ? "Buyurtmani Yangilash" : "Buyurtmani Yuborish";
+  const isSaboyEditing = isEditingMode && editingOrderType === 'saboy';
+  const isTableEditing = isEditingMode && editingOrderType === 'table';
+
   return (
     <div className="flex flex-col h-screen w-screen bg-white overflow-hidden border border-gray-300">
       {/* Yuqori Panel */}
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-300 bg-gray-50 flex-shrink-0 gap-4">
-         {/* Chap: Qaytish tugmasi va Qidiruv */}
         <div className="flex items-center gap-4">
-             <button
-                onClick={() => navigate(-1)} // Orqaga
-                title="Orqaga"
-                className="p-2 rounded-full hover:bg-gray-200 text-gray-600 hover:text-gray-800 transition"
-             >
+             <button onClick={() => navigate(-1)} title="Orqaga" className="p-2 rounded-full hover:bg-gray-200 text-gray-600 hover:text-gray-800 transition">
                  <FiArrowLeft size={22} />
              </button>
-            <input
-                type="text"
-                placeholder="Qidiruv..."
-                value={searchTerm}
-                onChange={handleSearchChange}
-                className="py-2 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
-            />
+            <input type="text" placeholder="Qidiruv..." value={searchTerm} onChange={handleSearchChange} className="py-2 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm"/>
         </div>
 
-        {/* O'rta: Stol/Saboy ko'rsatkichi, Saboy tugmasi va Katta Ekran Kategoriyalari */}
         <div className="flex items-center gap-2 md:gap-4">
             {/* Stol tugmasi (Stollar ro'yxatiga o'tish) */}
             <button
-                onClick={goToTables} // Stollarga o'tish
+                onClick={goToTables}
+                disabled={isEditingMode} // Tahrirlash rejimida stollarga o'tishni bloklash mumkin (ixtiyoriy)
                 className={`py-2 px-4 border rounded-md font-bold text-sm whitespace-nowrap cursor-pointer transition
-                            ${isSaboyMode
-                                ? 'bg-gray-100 border-gray-300 text-gray-600 hover:bg-gray-200' // Saboy aktiv bo'lsa oddiyroq
-                                : 'bg-yellow-100 border-yellow-200 text-yellow-800 hover:bg-yellow-200 ring-1 ring-yellow-400' // Stol aktiv bo'lsa (default)
-                            }`}
+                            ${isSaboyMode || isEditingMode
+                                ? 'bg-gray-100 border-gray-300 text-gray-600 hover:bg-gray-200'
+                                : 'bg-yellow-100 border-yellow-200 text-yellow-800 hover:bg-yellow-200 ring-1 ring-yellow-400'
+                            }
+                            ${isEditingMode ? 'opacity-70 cursor-not-allowed' : ''}
+                            `}
                 title="Stollar Ro'yxatiga O'tish"
              >
-              {tableNumber ? `${tableNumber}-Stol` : 'Stol?'}
+              { routeTableIdentifier && !isEditingMode && !isSaboyMode ? `${routeTableIdentifier}-Stol` : 'Stollar'}
             </button>
 
             {/* Saboy (Olib ketish) tugmasi */}
             <button
                 onClick={handleSaboyToggle}
+                disabled={isTableEditing} // Agar STOL tahrirlanayotgan bo'lsa, Saboy tugmasini o'chirish
                 className={`py-2 px-3 rounded-md font-bold text-sm whitespace-nowrap cursor-pointer transition flex items-center gap-1.5
                            ${isSaboyMode
-                               ? 'bg-blue-500 border border-blue-600 text-white hover:bg-blue-600 ring-1 ring-blue-300' // Saboy aktiv bo'lsa
-                               : 'bg-gray-100 border border-gray-300 text-gray-600 hover:bg-gray-200' // Saboy aktiv bo'lmasa
-                           }`}
+                               ? 'bg-blue-500 border border-blue-600 text-white hover:bg-blue-600 ring-1 ring-blue-300'
+                               : 'bg-gray-100 border border-gray-300 text-gray-600 hover:bg-gray-200'
+                           }
+                           ${isTableEditing ? 'opacity-50 cursor-not-allowed' : ''}
+                           `}
                 title="Olib ketish rejimini yoqish/o'chirish"
             >
                 <FiShoppingBag size={16} />
                 {ORDER_TYPE_SABOY}
             </button>
 
-            {/* Katta ekranlar uchun kategoriyalar */}
+             {/* Kategoriyalar (Katta ekran) */}
             <div className="hidden sm:flex space-x-1">
+                {/* ... avvalgidek ... */}
                 <button onClick={() => handleCategorySelect(CATEGORIES.ALL)} className={`py-2 px-3 md:px-4 bg-gray-500 text-white font-bold cursor-pointer rounded hover:bg-gray-600 text-xs md:text-sm ${getCategoryButtonStyle(CATEGORIES.ALL)}`}>Barchasi</button>
                 <button onClick={() => handleCategorySelect(CATEGORIES.FAST_FOOD)} className={`py-2 px-3 md:px-4 bg-orange-500 text-white font-bold cursor-pointer rounded hover:bg-orange-600 text-xs md:text-sm ${getCategoryButtonStyle(CATEGORIES.FAST_FOOD)}`}>Fast</button>
                 <button onClick={() => handleCategorySelect(CATEGORIES.BAR)} className={`py-2 px-3 md:px-4 bg-teal-500 text-white font-bold cursor-pointer rounded hover:bg-teal-600 text-xs md:text-sm ${getCategoryButtonStyle(CATEGORIES.BAR)}`}>Bar</button>
@@ -215,31 +337,27 @@ function Afitsant() {
             </div>
         </div>
 
-        {/* O'ng: Qo'ng'iroqcha tugmasi */}
          <div className="flex items-center flex-shrink-0">
-             <button
-                onClick={() => navigate('/orders')}
-                className="p-2 rounded-full hover:bg-gray-200 text-gray-600 hover:text-gray-800 transition"
-                title="Buyurtmalar Ro'yxati"
-            >
+             <button onClick={() => navigate('/orders')} className="p-2 rounded-full hover:bg-gray-200 text-gray-600 hover:text-gray-800 transition" title="Buyurtmalar Ro'yxati">
                 <FiBell size={22} />
             </button>
          </div>
       </div>
 
-       {/* Kichik ekranlar uchun kategoriyalar */}
+       {/* Kategoriyalar (Kichik ekran) */}
         <div className="sm:hidden flex space-x-1 px-4 pb-2 border-b border-gray-200 bg-gray-50 justify-center">
-            <button onClick={() => handleCategorySelect(CATEGORIES.ALL)} className={`py-1.5 px-3 bg-gray-500 text-white font-bold cursor-pointer rounded hover:bg-gray-600 text-xs ${getCategoryButtonStyle(CATEGORIES.ALL)}`}>Barchasi</button>
+           {/* ... avvalgidek ... */}
+           <button onClick={() => handleCategorySelect(CATEGORIES.ALL)} className={`py-1.5 px-3 bg-gray-500 text-white font-bold cursor-pointer rounded hover:bg-gray-600 text-xs ${getCategoryButtonStyle(CATEGORIES.ALL)}`}>Barchasi</button>
             <button onClick={() => handleCategorySelect(CATEGORIES.FAST_FOOD)} className={`py-1.5 px-3 bg-orange-500 text-white font-bold cursor-pointer rounded hover:bg-orange-600 text-xs ${getCategoryButtonStyle(CATEGORIES.FAST_FOOD)}`}>Fast</button>
             <button onClick={() => handleCategorySelect(CATEGORIES.BAR)} className={`py-1.5 px-3 bg-teal-500 text-white font-bold cursor-pointer rounded hover:bg-teal-600 text-xs ${getCategoryButtonStyle(CATEGORIES.BAR)}`}>Bar</button>
             <button onClick={() => handleCategorySelect(CATEGORIES.MILLIY)} className={`py-1.5 px-3 bg-pink-600 text-white font-bold cursor-pointer rounded hover:bg-pink-700 text-xs ${getCategoryButtonStyle(CATEGORIES.MILLIY)}`}>Milliy</button>
         </div>
 
-
       {/* Asosiy Kontent Maydoni */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Menyu Elementlari Grid */}
+        {/* Menyu Elementlari */}
         <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 p-4 overflow-y-auto content-start border-r border-gray-300">
+          {/* ... avvalgidek ... */}
           {filteredMenuItems.map((item) => {
             const isInOrder = order.some(orderItem => orderItem.id === item.id);
             let buttonBgClass = '';
@@ -290,6 +408,7 @@ function Afitsant() {
         <div className="w-full max-w-sm flex flex-col bg-gray-50 border-l border-gray-300">
           {/* Scroll bo'ladigan qism */}
           <div className="flex-grow overflow-y-auto p-3 md:p-4">
+            {/* ... avvalgidek ... */}
             {order.length === 0 ? (
               <p className="text-center text-gray-500 mt-10">Buyurtma bo'sh</p>
             ) : (
@@ -306,45 +425,38 @@ function Afitsant() {
               ))
             )}
           </div>
-          {/* Pastki qism (VAQT va YASHIL TUGMA bilan) */}
+          {/* Pastki qism */}
           {order.length > 0 && (
               <div className="p-3 md:p-4 flex-shrink-0 border-t border-gray-300 bg-gray-100">
-                {/* Stol/Saboy, VAQT va Summa */}
                 <div className="flex justify-between items-center font-bold mb-3">
-                  {/* Stol yoki Saboy ko'rsatiladi */}
-                  <span className={`text-sm md:text-base ${isSaboyMode ? 'text-blue-600' : 'text-yellow-800'}`}>
+                  <span className={`text-sm md:text-base ${isSaboyMode ? (isEditingMode ? 'text-purple-600' : 'text-blue-600') : (isEditingMode ? 'text-purple-600' : 'text-yellow-800')}`}>
                     {currentOrderDisplay}
                   </span>
                   <span className="text-xs text-gray-500 font-medium">{getCurrentTimestamp()}</span>
                   <span className="text-base md:text-lg text-gray-800">{formatPrice(totalAmount)}.som</span>
                 </div>
-                {/* Tugma */}
                 <div className="flex justify-center gap-3">
                   <button
                     onClick={handleOrderSubmit}
-                    className="w-full py-2.5 px-6 rounded-md font-bold text-white cursor-pointer bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition duration-150"
+                    className={`w-full py-2.5 px-6 rounded-md font-bold text-white cursor-pointer transition duration-150
+                                ${isEditingMode ? 'bg-purple-600 hover:bg-purple-700' : 'bg-green-600 hover:bg-green-700'}
+                                disabled:opacity-50 disabled:cursor-not-allowed`}
                     disabled={order.length === 0}
                   >
-                    Buyurtmani Yuborish
+                    {submitButtonText}
                   </button>
                 </div>
               </div>
           )}
-          {/* Buyurtma bo'sh bo'lganda joy saqlagich */}
           {order.length === 0 && ( <div className="p-4 flex-shrink-0 border-t border-gray-300 bg-gray-100 h-[98px]"></div> )}
         </div>
       </div>
 
       {/* Eng Pastki Panel */}
        <div className="flex justify-between items-center px-4 py-1.5 border-t border-gray-300 bg-gray-100 text-xs flex-shrink-0">
-        <span className="font-semibold text-gray-700">Ofisant: {waiterName}</span>
+        <span className="font-semibold text-gray-700">Ofitsant: {currentWaiterName}</span>
         <label className="flex items-center space-x-1.5 cursor-pointer text-gray-600">
-            <input
-              type="checkbox"
-              checked={hideUnavailable}
-              onChange={handleHideUnavailableToggle}
-              className="h-3.5 w-3.5 rounded border-gray-400 text-blue-600 shadow-sm focus:border-blue-400 focus:ring focus:ring-offset-0 focus:ring-blue-300 focus:ring-opacity-60 transition duration-150 ease-in-out"
-            />
+            <input type="checkbox" checked={hideUnavailable} onChange={handleHideUnavailableToggle} className="h-3.5 w-3.5 rounded border-gray-400 text-blue-600 shadow-sm focus:border-blue-400 focus:ring focus:ring-offset-0 focus:ring-blue-300 focus:ring-opacity-60 transition duration-150 ease-in-out"/>
             <span>Tugaganlarni yashirish</span>
         </label>
       </div>
