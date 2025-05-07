@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { FiBell, FiArrowLeft } from 'react-icons/fi'; // FiShoppingBag olib tashlandi
+import { FiBell, FiArrowLeft } from 'react-icons/fi';
 
 const CATEGORIES = {
   MILLIY: 'milliy',
@@ -8,8 +8,7 @@ const CATEGORIES = {
   BAR: 'bar',
   ALL: 'all'
 };
-// const ORDER_TYPE_SABOY = 'Saboy'; // Olib tashlandi
-const LOCAL_STORAGE_BOOKED_TABLES = 'bookedTablesData'; // Faqat stollar uchun
+const LOCAL_STORAGE_BOOKED_TABLES = 'bookedTablesData';
 
 function Afitsant() {
   const [order, setOrder] = useState([]);
@@ -17,13 +16,11 @@ function Afitsant() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState(CATEGORIES.ALL);
   const [hideUnavailable, setHideUnavailable] = useState(false);
-  // const [isSaboyMode, setIsSaboyMode] = useState(false); // Olib tashlandi
   const [isEditingMode, setIsEditingMode] = useState(false);
-  // const [editingOrderType, setEditingOrderType] = useState(null); // Endi faqat 'table'
-  const [editingTableId, setEditingTableId] = useState(null); // editingOrderId o'rniga
-  const [currentWaiterName, setCurrentWaiterName] = useState('Rustamov Jasur');
+  const [editingTableId, setEditingTableId] = useState(null);
+  const [currentWaiterName, setCurrentWaiterName] = useState('Rustamov Jasur'); // Default yoki tizimga kirgan ofitsiant nomi
 
-  const { tableNumber } = useParams(); // Faqat tableNumber ishlatiladi
+  const { tableNumber } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -55,25 +52,26 @@ function Afitsant() {
 
   useEffect(() => {
     const stateData = location.state;
+    // Tahrirlash rejimi uchun ma'lumotlarni yuklash
     if (stateData?.isEditing && stateData?.existingOrderData) {
       const { items, waiterName: existingWaiter, id, tableNumber: existingTableNum } = stateData.existingOrderData;
-      // const type = stateData.editingOrderType; // Endi shart emas
-
       setOrder(items || []);
       setCurrentWaiterName(existingWaiter || 'Noma`lum Ofitsiant');
       setIsEditingMode(true);
-      // setEditingOrderType('table'); // Har doim 'table'
-      setEditingTableId(id); // Stolning unikal ID sini saqlash
-    } else {
+      setEditingTableId(id); // Stolning localStorage dagi ID si
+    } else if (tableNumber) { // Agar tahrirlash bo'lmasa, lekin stol raqami bo'lsa (yangi buyurtma uchun)
       setOrder([]);
-      setCurrentWaiterName('Rustamov Jasur');
+      // Agar tizimga kirgan ofitsiant nomini olish imkoni bo'lsa, shu yerda o'rnating:
+      // setCurrentWaiterName(loggedInWaiterName); 
+      setCurrentWaiterName('Rustamov Jasur'); // Hozircha default
       setIsEditingMode(false);
-      // setEditingOrderType(null);
       setEditingTableId(null);
+    } else { // Agar stol raqami ham bo'lmasa (masalan, URL noto'g'ri)
+        navigate('/tables'); // Stollar sahifasiga qaytarish
     }
-  }, [location.state, tableNumber]); // tableNumber (useParams dan) ham dependency da bo'lishi mumkin
+  }, [location.state, tableNumber, navigate]);
 
-  const handleAddItem = (menuItem) => {
+  const handleAddItem = (menuItem) => { /* ... o'zgarishsiz ... */
     if (!menuItem.available) return;
     setOrder(prevOrder => {
       const existingItem = prevOrder.find(item => item.id === menuItem.id);
@@ -82,7 +80,7 @@ function Afitsant() {
           item.id === menuItem.id ? { ...item, quantity: item.quantity + 1 } : item
         );
       } else {
-        return [...prevOrder, { ...menuItem, quantity: 1 }]; // To'liq menuItem ni saqlash
+        return [...prevOrder, { ...menuItem, quantity: 1 }];
       }
     });
   };
@@ -107,118 +105,100 @@ function Afitsant() {
   };
   const handleSearchChange = (event) => { setSearchTerm(event.target.value); };
   const handleCategorySelect = (category) => { setSelectedCategory(category); };
-
-  const goToTables = () => {
-      setIsEditingMode(false);
-      // setEditingOrderType(null);
-      setEditingTableId(null);
-      navigate('/tables');
-  };
+  const goToTables = () => { navigate('/tables'); }; // Endi shunchaki /tables ga qaytadi
   const handleHideUnavailableToggle = () => { setHideUnavailable(prevValue => !prevValue); };
 
-  // const handleSaboyToggle = () => {}; // Olib tashlandi
-
-  const handleOrderSubmit = () => {
+  // **O'ZGARTIRILDI:** handleOrderSubmit -> handleUpdateOrCreateOrder
+  const handleUpdateOrCreateOrder = () => {
     if (order.length === 0) return;
 
-    // Endi orderIdentifier har doim stol raqami bo'ladi
     const orderIdentifier = tableNumber || 'Noma`lum Stol';
-
-    const submittedOrderData = {
-      // ID va panel Tables.jsx da yoki bu yerda localStorage ga saqlashda belgilanadi
-      tableNumber: parseInt(orderIdentifier), // Raqam sifatida saqlash yaxshiroq
-      waiterName: currentWaiterName,
-      items: order, // Buyurtma qilingan mahsulotlar
-      totalAmount: totalAmount,
-      timestamp: getCurrentTimestamp(),
-      status: isEditingMode ? 'updated' : 'pending',
-    };
+    const tableNumInt = parseInt(orderIdentifier);
+    const currentTimestamp = getCurrentTimestamp();
 
     try {
         const storedTablesRaw = localStorage.getItem(LOCAL_STORAGE_BOOKED_TABLES);
         let storedTables = storedTablesRaw ? JSON.parse(storedTablesRaw) : [];
-        const tableNumInt = parseInt(orderIdentifier);
 
-        // Panelni aniqlash (bu logika murakkabroq bo'lishi mumkin)
-        // Hozircha, agar mavjud bo'lsa, panelni saqlab qolamiz, aks holda 'Zal' default.
-        let panelOfTable = 'Zal'; // Default
-        const existingTableInfo = storedTables.find(tbl => tbl.tableNumber === tableNumInt);
+        let panelOfTable = 'Zal'; // Default panel
+        const existingTableInfo = storedTables.find(tbl => tbl.id === editingTableId || tbl.tableNumber === tableNumInt);
         if (existingTableInfo && existingTableInfo.panel) {
             panelOfTable = existingTableInfo.panel;
-        } else {
-            // Agar panelni aniqlash kerak bo'lsa, tableRanges dan topish mumkin
-            // Misol:
-            // if (tableNumInt >= 1 && tableNumInt <= 5) panelOfTable = 'Zal';
-            // else if (tableNumInt >= 6 && tableNumInt <= 10) panelOfTable = 'Podval';
-            // else if (tableNumInt >= 11 && tableNumInt <= 15) panelOfTable = 'Kabinet';
         }
 
-
-        if (isEditingMode && editingTableId) { // Mavjud stolni yangilash
+        if (isEditingMode && editingTableId) {
+            // Mavjud stol buyurtmasini YANGILASH
             storedTables = storedTables.map(tbl =>
-                tbl.id === editingTableId // ID orqali topish
-                    ? { ...tbl, orderItems: order, waiterName: currentWaiterName, timestamp: submittedOrderData.timestamp }
+                tbl.id === editingTableId
+                    ? { ...tbl, orderItems: order, waiterName: currentWaiterName, timestamp: currentTimestamp }
                     : tbl
             );
-            submittedOrderData.id = editingTableId;
-            submittedOrderData.panel = panelOfTable; // Panelni ham qo'shish
-        } else { // Yangi band stol qo'shish
+        } else {
+            // YANGI stol buyurtmasini qo'shish yoki almashtirish
             const newTableOrderId = `table-${tableNumInt}-${Date.now()}`;
-            submittedOrderData.id = newTableOrderId;
-            submittedOrderData.panel = panelOfTable; // Yangi stol uchun panel
-
             const newBookedTableEntry = {
                 id: newTableOrderId,
                 tableNumber: tableNumInt,
                 waiterName: currentWaiterName,
                 orderItems: order,
-                panel: panelOfTable, // Bu muhim!
-                timestamp: submittedOrderData.timestamp
+                panel: panelOfTable,
+                timestamp: currentTimestamp
             };
-             // Eski yozuvni (agar ID bo'yicha topilmasa, stol raqami bo'yicha) o'chirish yoki yangilash
             const existingIdx = storedTables.findIndex(tbl => tbl.tableNumber === tableNumInt);
             if (existingIdx > -1) {
-                storedTables[existingIdx] = newBookedTableEntry; // Mavjudini to'liq almashtirish
+                storedTables[existingIdx] = newBookedTableEntry; // Almashtirish
             } else {
-                storedTables.push(newBookedTableEntry);
+                storedTables.push(newBookedTableEntry); // Qo'shish
             }
         }
         localStorage.setItem(LOCAL_STORAGE_BOOKED_TABLES, JSON.stringify(storedTables));
+        navigate('/tables', { state: { refreshTableData: true } }); // Stol sahifasiga qaytish
     } catch (error) {
         console.error("Error updating localStorage for tables:", error);
+        alert("Buyurtmani saqlashda xatolik yuz berdi!");
     }
-
-    // Orders sahifasiga yuborish (agar kerak bo'lsa)
-    // navigate('/orders', { state: { submittedOrder: submittedOrderData } });
-    // Yoki to'g'ri Tables sahifasiga qaytish va ma'lumotni yangilash
-    navigate('/tables', { state: { refreshTableData: true } });
   };
 
-  useEffect(() => {
+  // **YANGI FUNKSIYA:** Buyurtmani yakunlash (localStorage dan o'chirish)
+  const handleFinishOrder = () => {
+    if (!isEditingMode || !editingTableId) return; // Faqat tahrirlash rejimida va ID bo'lsa ishlaydi
+
+    if (window.confirm(`${tableNumber}-stol buyurtmasini haqiqatan ham yakunlamoqchimisiz? Bu amalni ortga qaytarib bo'lmaydi.`)) {
+        try {
+            const storedTablesRaw = localStorage.getItem(LOCAL_STORAGE_BOOKED_TABLES);
+            let storedTables = storedTablesRaw ? JSON.parse(storedTablesRaw) : [];
+
+            // ID bo'yicha buyurtmani topib o'chirish
+            const updatedTables = storedTables.filter(tbl => tbl.id !== editingTableId);
+
+            localStorage.setItem(LOCAL_STORAGE_BOOKED_TABLES, JSON.stringify(updatedTables));
+            alert(`${tableNumber}-stol buyurtmasi muvaffaqiyatli yakunlandi.`);
+            navigate('/tables', { state: { refreshTableData: true, finishedTableId: editingTableId } }); // Stol sahifasiga qaytish
+        } catch (error) {
+            console.error("Error finishing order in localStorage:", error);
+            alert("Buyurtmani yakunlashda xatolik yuz berdi!");
+        }
+    }
+  };
+
+
+  useEffect(() => { /* ... totalAmount hisoblash o'zgarishsiz ... */
       const newTotal = order.reduce((sum, item) => sum + item.price * item.quantity, 0);
       setTotalAmount(newTotal);
   }, [order]);
 
-  const categoryFilteredItems = selectedCategory === CATEGORIES.ALL
-    ? originalMenuItems
-    : originalMenuItems.filter(item => item.category === selectedCategory);
-  const searchFilteredItems = categoryFilteredItems.filter(item =>
-    item.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-  const filteredMenuItems = hideUnavailable
-    ? searchFilteredItems.filter(item => item.available === true)
-    : searchFilteredItems;
-  const getCategoryButtonStyle = (category) => {
-      return selectedCategory === category ? 'ring-2 ring-offset-1 ring-blue-500' : '';
-  };
+  // Menyuni filtrlash logikasi o'zgarishsiz
+  const categoryFilteredItems = selectedCategory === CATEGORIES.ALL ? originalMenuItems : originalMenuItems.filter(item => item.category === selectedCategory);
+  const searchFilteredItems = categoryFilteredItems.filter(item => item.name.toLowerCase().includes(searchTerm.toLowerCase()));
+  const filteredMenuItems = hideUnavailable ? searchFilteredItems.filter(item => item.available === true) : searchFilteredItems;
+  const getCategoryButtonStyle = (category) => selectedCategory === category ? 'ring-2 ring-offset-1 ring-blue-500' : '';
 
-  // Endi currentOrderDisplay har doim stol uchun bo'ladi
-  const currentOrderDisplay = tableNumber ? `${tableNumber}-Stol${isEditingMode ? ' (Tahrirlash)' : ''}` : 'Stol?';
+  const currentOrderDisplay = tableNumber ? `${tableNumber}-Stol` : 'Stol?'; // Endi tahrirlash rejimi yozilmaydi
   const submitButtonText = isEditingMode ? "Buyurtmani Yangilash" : "Buyurtmani Yuborish";
 
   return (
     <div className="flex flex-col h-screen w-screen bg-white overflow-hidden border border-gray-300">
-      {/* Yuqori Panel */}
+      {/* Yuqori Panel (o'zgarishsiz) */}
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-300 bg-gray-50 flex-shrink-0 gap-4">
         <div className="flex items-center gap-4">
              <button onClick={() => navigate(-1)} title="Orqaga" className="p-2 rounded-full hover:bg-gray-200 text-gray-600 hover:text-gray-800 transition">
@@ -226,25 +206,10 @@ function Afitsant() {
              </button>
             <input type="text" placeholder="Qidiruv..." value={searchTerm} onChange={handleSearchChange} className="py-2 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm"/>
         </div>
-
         <div className="flex items-center gap-2 md:gap-4">
-            {/* Stol tugmasi */}
-            <button
-                onClick={goToTables}
-                className={`py-2 px-4 border rounded-md font-bold text-sm whitespace-nowrap cursor-pointer transition
-                            ${isEditingMode
-                                ? 'bg-gray-100 border-gray-300 text-gray-600 hover:bg-gray-200' // Tahrirlashda oddiyroq
-                                : 'bg-yellow-100 border-yellow-200 text-yellow-800 hover:bg-yellow-200 ring-1 ring-yellow-400'
-                            }
-                           `}
-                title="Stollar Ro'yxatiga O'tish"
-             >
-              {tableNumber && !isEditingMode ? `${tableNumber}-Stol` : 'Stollar'}
+            <button onClick={goToTables} className={`py-2 px-4 border rounded-md font-bold text-sm whitespace-nowrap cursor-pointer transition bg-yellow-100 border-yellow-200 text-yellow-800 hover:bg-yellow-200 ring-1 ring-yellow-400`} title="Stollar Ro'yxatiga O'tish">
+              {tableNumber ? `${tableNumber}-Stol` : 'Stollar'}
             </button>
-
-            {/* Saboy tugmasi olib tashlandi */}
-
-            {/* Kategoriyalar */}
             <div className="hidden sm:flex space-x-1">
                  <button onClick={() => handleCategorySelect(CATEGORIES.ALL)} className={`py-2 px-3 md:px-4 bg-gray-500 text-white font-bold cursor-pointer rounded hover:bg-gray-600 text-xs md:text-sm ${getCategoryButtonStyle(CATEGORIES.ALL)}`}>Barchasi</button>
                 <button onClick={() => handleCategorySelect(CATEGORIES.FAST_FOOD)} className={`py-2 px-3 md:px-4 bg-orange-500 text-white font-bold cursor-pointer rounded hover:bg-orange-600 text-xs md:text-sm ${getCategoryButtonStyle(CATEGORIES.FAST_FOOD)}`}>Fast</button>
@@ -252,14 +217,10 @@ function Afitsant() {
                 <button onClick={() => handleCategorySelect(CATEGORIES.MILLIY)} className={`py-2 px-3 md:px-4 bg-pink-600 text-white font-bold cursor-pointer rounded hover:bg-pink-700 text-xs md:text-sm ${getCategoryButtonStyle(CATEGORIES.MILLIY)}`}>Milliy</button>
             </div>
         </div>
-
          <div className="flex items-center flex-shrink-0">
-             <button onClick={() => navigate('/orders')} className="p-2 rounded-full hover:bg-gray-200 text-gray-600 hover:text-gray-800 transition" title="Buyurtmalar Ro'yxati">
-                <FiBell size={22} />
-            </button>
+             <button onClick={() => navigate('/orders')} className="p-2 rounded-full hover:bg-gray-200 text-gray-600 hover:text-gray-800 transition" title="Buyurtmalar Ro'yxati"> <FiBell size={22} /> </button>
          </div>
       </div>
-
        <div className="sm:hidden flex space-x-1 px-4 pb-2 border-b border-gray-200 bg-gray-50 justify-center">
            <button onClick={() => handleCategorySelect(CATEGORIES.ALL)} className={`py-1.5 px-3 bg-gray-500 text-white font-bold cursor-pointer rounded hover:bg-gray-600 text-xs ${getCategoryButtonStyle(CATEGORIES.ALL)}`}>Barchasi</button>
             <button onClick={() => handleCategorySelect(CATEGORIES.FAST_FOOD)} className={`py-1.5 px-3 bg-orange-500 text-white font-bold cursor-pointer rounded hover:bg-orange-600 text-xs ${getCategoryButtonStyle(CATEGORIES.FAST_FOOD)}`}>Fast</button>
@@ -267,25 +228,18 @@ function Afitsant() {
             <button onClick={() => handleCategorySelect(CATEGORIES.MILLIY)} className={`py-1.5 px-3 bg-pink-600 text-white font-bold cursor-pointer rounded hover:bg-pink-700 text-xs ${getCategoryButtonStyle(CATEGORIES.MILLIY)}`}>Milliy</button>
         </div>
 
-      {/* Asosiy Kontent Maydoni */}
+      {/* Asosiy Kontent Maydoni (o'zgarishsiz) */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Menyu Elementlari */}
+        {/* Menyu Elementlari (o'zgarishsiz) */}
         <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 p-4 overflow-y-auto content-start border-r border-gray-300">
           {filteredMenuItems.map((item) => {
             const isInOrder = order.some(orderItem => orderItem.id === item.id);
             let buttonBgClass = '';
-
             if (!item.available) { buttonBgClass = 'bg-gray-400 cursor-not-allowed opacity-70'; }
             else if (isInOrder) { buttonBgClass = 'bg-rose-600 hover:bg-rose-700 cursor-pointer'; }
             else { buttonBgClass = 'bg-green-600 hover:bg-green-700 cursor-pointer'; }
-
             return (
-              <button
-                key={item.id}
-                onClick={() => handleAddItem(item)}
-                disabled={!item.available}
-                className={`flex flex-col justify-between p-2 md:p-3 rounded-lg font-bold text-center text-white shadow-md transition-colors duration-150 min-h-[80px] md:min-h-[92px] text-xs md:text-sm ${buttonBgClass}`}
-              >
+              <button key={item.id} onClick={() => handleAddItem(item)} disabled={!item.available} className={`flex flex-col justify-between p-2 md:p-3 rounded-lg font-bold text-center text-white shadow-md transition-colors duration-150 min-h-[80px] md:min-h-[92px] text-xs md:text-sm ${buttonBgClass}`}>
                 <div className="mb-1 line-clamp-2">{item.name}</div>
                 <div className="flex items-center justify-between w-full mt-auto pt-1">
                   <span className="text-[10px] md:text-xs font-normal whitespace-nowrap">{formatPrice(item.price)}.som</span>
@@ -319,6 +273,7 @@ function Afitsant() {
               ))
             )}
           </div>
+          {/* **O'ZGARTIRILDI:** Pastki qism - ikkita tugma (agar tahrirlash rejimi bo'lsa) */}
           {order.length > 0 && (
               <div className="p-3 md:p-4 flex-shrink-0 border-t border-gray-300 bg-gray-100">
                 <div className="flex justify-between items-center font-bold mb-3">
@@ -328,16 +283,31 @@ function Afitsant() {
                   <span className="text-xs text-gray-500 font-medium">{getCurrentTimestamp()}</span>
                   <span className="text-base md:text-lg text-gray-800">{formatPrice(totalAmount)}.som</span>
                 </div>
+                {/* Tugmalar uchun konteyner */}
                 <div className="flex justify-center gap-3">
+                  {/* Yangilash yoki Yuborish tugmasi */}
                   <button
-                    onClick={handleOrderSubmit}
-                    className={`w-full py-2.5 px-6 rounded-md font-bold text-white cursor-pointer transition duration-150
+                    onClick={handleUpdateOrCreateOrder}
+                    className={`w-full py-2.5 px-4 rounded-md font-bold text-white cursor-pointer transition duration-150
                                 ${isEditingMode ? 'bg-purple-600 hover:bg-purple-700' : 'bg-green-600 hover:bg-green-700'}
                                 disabled:opacity-50 disabled:cursor-not-allowed`}
                     disabled={order.length === 0}
                   >
-                    {submitButtonText}
+                    {submitButtonText} 
                   </button>
+                  
+                  {/* Faqat tahrirlash rejimida ko'rinadigan Yakunlash tugmasi */}
+                  {isEditingMode && (
+                    <button
+                      onClick={handleFinishOrder}
+                      className={`w-full py-2.5 px-4 rounded-md font-bold text-white cursor-pointer transition duration-150
+                                  bg-red-600 hover:bg-red-700 
+                                  disabled:opacity-50 disabled:cursor-not-allowed`}
+                      disabled={order.length === 0} // Yoki boshqa shartlar
+                    >
+                      Yakunlash
+                    </button>
+                  )}
                 </div>
               </div>
           )}
@@ -345,6 +315,7 @@ function Afitsant() {
         </div>
       </div>
 
+       {/* Pastki status bar (o'zgarishsiz) */}
        <div className="flex justify-between items-center px-4 py-1.5 border-t border-gray-300 bg-gray-100 text-xs flex-shrink-0">
         <span className="font-semibold text-gray-700">Ofitsant: {currentWaiterName}</span>
         <label className="flex items-center space-x-1.5 cursor-pointer text-gray-600">
