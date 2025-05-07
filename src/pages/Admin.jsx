@@ -1,29 +1,30 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom'; // useNavigate import qilindi
+import React, { useState, useEffect, useRef, useMemo } from 'react'; // useMemo import qilindi
+import { useNavigate } from 'react-router-dom';
 import {
   FiUsers, FiShield, FiBox, FiGrid, FiSquare, FiSettings, FiLogOut, FiUser,
   FiPlus, FiRefreshCw, FiX, FiCalendar, FiEdit, FiTrash, FiHome,
-  FiDollarSign, FiShoppingCart, FiPercent, FiUpload
+  FiDollarSign, FiShoppingCart, FiPercent, FiUpload, FiFilter // FiFilter ni qo'shdim
 } from 'react-icons/fi';
 
+// 1. Mahsulotlarga categoryId qo'shdim (TAXMINIY! Buni o'zingiz to'g'rilang)
+const initialProducts = [
+    { id: 'GA', nomi: 'Gamburger', narx: '19000.00 so\'m', miqdori: 50, categoryId: 1 }, // fastfood
+    { id: 'CH', nomi: 'Chizburger', narx: '21000.00 so\'m', miqdori: 45, categoryId: 1 }, // fastfood
+    { id: 'LV', nomi: 'Lavash', narx: '23000.00 so\'m', miqdori: 60, categoryId: 1 },    // fastfood
+    { id: 'KF', nomi: 'Kartoshka Fri', narx: '10000.00 so\'m', miqdori: 100, categoryId: 1 },// fastfood
+    { id: 'CO', nomi: 'Coca-Cola', narx: '7000.00 so\'m', miqdori: 80, categoryId: 2 },   // ichimliklar
+    { id: 'IT', nomi: 'Italyan Salatlar', narx: '25000.00 so\'m', miqdori: 25, categoryId: 3 } // salatlar
+];
+const initialCategories = [
+    { id: 1, nomi: 'fastfood' }, { id: 2, nomi: 'ichimliklar' }, { id: 3, nomi: 'salatlar' },
+    { id: 4, nomi: 'shirinliklar' }, { id: 5, nomi: 'milliy' }, { id: 6, nomi: 'it ovqatdan' } // "it ovqatdan" o'rniga "Boshqalar" yoki "Non mahsulotlari" kabi nom yaxshiroq bo'lishi mumkin
+];
 const initialEmployees = [
     { id: 1, ism: 'alisher bohodirov', username: 'staff01', rol: 'Offisiant', holat: 'Faol' },
     { id: 2, ism: 'dilshod ismoilov', username: 'staff02', rol: 'Oshpaz', holat: 'Faol' },
     { id: 3, ism: 'sarvar rahmatov', username: 'sarvar01', rol: 'Administrator', holat: 'Faol' },
     { id: 4, ism: 'rustam qosimov', username: 'kuryer01', rol: 'Yetkazib beruvchi', holat: 'Faol emas' },
     { id: 5, ism: 'Odam Odam', username: 'Odam', rol: 'Offisiant', holat: 'Faol' }
-];
-const initialProducts = [
-    { id: 'GA', nomi: 'Gamburger', narx: '19000.00 so\'m', miqdori: 50 },
-    { id: 'CH', nomi: 'Chizburger', narx: '21000.00 so\'m', miqdori: 45 },
-    { id: 'LV', nomi: 'Lavash', narx: '23000.00 so\'m', miqdori: 60 },
-    { id: 'KF', nomi: 'Kartoshka Fri', narx: '10000.00 so\'m', miqdori: 100 },
-    { id: 'CO', nomi: 'Coca-Cola', narx: '7000.00 so\'m', miqdori: 80 },
-    { id: 'IT', nomi: 'Italyan Salatlar', narx: '25000.00 so\'m', miqdori: 25 }
-];
-const initialCategories = [
-    { id: 1, nomi: 'fastfood' }, { id: 2, nomi: 'ichimliklar' }, { id: 3, nomi: 'salatlar' },
-    { id: 4, nomi: 'shirinliklar' }, { id: 5, nomi: 'milliy' }, { id: 6, nomi: 'it ovqatdan' }
 ];
 const initialTables = [
     { id: 1, nomi: '1', zona: 'Hall', holati: 'Bo\'sh' }, { id: 2, nomi: '2', zona: 'Hall', holati: 'Band' },
@@ -43,7 +44,7 @@ const recentOrders = [
 const roleOptions = ['Offisiant', 'Oshpaz', 'Kassir', 'Yetkazib beruvchi', 'Administrator'];
 
 function Admin() {
-  const navigate = useNavigate(); // useNavigate ni ishga tushirish
+  const navigate = useNavigate();
   const [activePage, setActivePage] = useState('dashboard');
   const [isAddEmployeeModalOpen, setIsAddEmployeeModalOpen] = useState(false);
   const [isAddProductModalOpen, setIsAddProductModalOpen] = useState(false);
@@ -53,7 +54,7 @@ function Admin() {
   const [editingItem, setEditingItem] = useState(null);
   const [editFormData, setEditFormData] = useState({});
   const [newEmployee, setNewEmployee] = useState({ username: '', firstName: '', lastName: '', role: '', pin: '', isActive: true });
-  const [newProduct, setNewProduct] = useState({ name: '', price: '', quantity: '', isActive: true });
+  const [newProduct, setNewProduct] = useState({ name: '', price: '', quantity: '', categoryId: '', isActive: true }); // categoryId qo'shildi
   const [newCategory, setNewCategory] = useState({ name: '' });
   const [newTable, setNewTable] = useState({ name: '', zone: '', isActive: true });
 
@@ -62,6 +63,9 @@ function Admin() {
   const [userInfo, setUserInfo] = useState({ name: 'Admin User', role: 'Administrator', image: null });
   const [profileFormData, setProfileFormData] = useState({ name: '', imageFile: null, imagePreview: null });
   const fileInputRef = useRef(null);
+
+  // 2. Tanlangan kategoriya uchun state
+  const [selectedProductCategory, setSelectedProductCategory] = useState(''); // '' - barcha kategoriyalar
 
   useEffect(() => {
     if (isProfileModalOpen) {
@@ -91,9 +95,14 @@ function Admin() {
 
   const handleAddProduct = (e) => {
     e.preventDefault();
-    const productToAdd = { ...newProduct, quantity: parseInt(newProduct.quantity) || 0 };
+    // categoryId ni int qilib saqlash (agar selectdan string kelsa)
+    const productToAdd = { 
+        ...newProduct, 
+        quantity: parseInt(newProduct.quantity) || 0,
+        categoryId: newProduct.categoryId ? parseInt(newProduct.categoryId) : null 
+    };
     console.log('ADD Product:', productToAdd);
-    setNewProduct({ name: '', price: '', quantity: '', isActive: true });
+    setNewProduct({ name: '', price: '', quantity: '', categoryId: '', isActive: true });
     setIsAddProductModalOpen(false);
   };
 
@@ -137,7 +146,12 @@ function Admin() {
     if (itemData) {
       console.log(`Editing ${type} with ID: ${id}`, itemData);
       setEditingItem({ type: type, data: { ...itemData } });
-      setEditFormData({ ...itemData });
+      // Mahsulot tahrirlashda categoryId ni string ga o'tkazamiz, select to'g'ri ishlashi uchun
+      if (type === 'Mahsulot' && itemData.categoryId) {
+        setEditFormData({ ...itemData, categoryId: String(itemData.categoryId) });
+      } else {
+        setEditFormData({ ...itemData });
+      }
       setIsEditModalOpen(true);
     } else {
       console.error(`${type} (ID: ${id}) topilmadi.`);
@@ -147,6 +161,11 @@ function Admin() {
   const handleDelete = (type, id) => {
     if (window.confirm(`${type} (ID: ${id}) ni haqiqatan ham o'chirmoqchimisiz?`)) {
       console.log(`O'chirish so'rovi: ${type} - ID: ${id}`);
+      // Haqiqiy o'chirish logikasi bu yerda bo'lishi kerak
+      // Masalan:
+      // if (type === 'Mahsulot') {
+      //   setInitialProducts(prev => prev.filter(p => p.id !== id));
+      // }
     }
   };
 
@@ -181,14 +200,25 @@ function Admin() {
 
     let dataToSave = { ...editFormData };
 
-    if (editingItem.type === 'Mahsulot' && dataToSave.miqdori !== undefined) {
-        dataToSave.miqdori = parseInt(dataToSave.miqdori) || 0;
-    }
-    if (editingItem.type === 'Mahsulot' && dataToSave.narx !== undefined && typeof dataToSave.narx === 'string') {
-        dataToSave.narx = dataToSave.narx.replace(/\s*so'm/i, '').trim();
+    if (editingItem.type === 'Mahsulot') {
+        if (dataToSave.miqdori !== undefined) {
+            dataToSave.miqdori = parseInt(dataToSave.miqdori) || 0;
+        }
+        if (dataToSave.narx !== undefined && typeof dataToSave.narx === 'string') {
+            dataToSave.narx = dataToSave.narx.replace(/\s*so'm/i, '').trim();
+        }
+        // categoryId ni int qilib saqlash
+        if (dataToSave.categoryId) {
+            dataToSave.categoryId = parseInt(dataToSave.categoryId);
+        }
     }
 
     console.log(`Saqlash: ${editingItem.type} (ID: ${editingItem.data.id})`, dataToSave);
+    // Haqiqiy saqlash logikasi bu yerda (masalan, initialProducts ni yangilash)
+    // Misol uchun:
+    // if (editingItem.type === 'Mahsulot') {
+    //   setInitialProducts(prevProducts => prevProducts.map(p => p.id === editingItem.data.id ? dataToSave : p));
+    // }
     setIsEditModalOpen(false);
     setEditingItem(null);
     setEditFormData({});
@@ -206,7 +236,7 @@ function Admin() {
   const handleConfirmExit = () => {
     console.log("Chiqish tasdiqlandi! / ga navigatsiya qilinmoqda...");
     handleCloseExitModal();
-    navigate('/'); // Navigatsiyani amalga oshirish
+    navigate('/');
   };
 
   const handleOpenProfileModal = () => {
@@ -269,8 +299,19 @@ function Admin() {
         fileInputRef.current?.click();
     };
 
+  // 3. Filtrlangan mahsulotlar ro'yxati (useMemo bilan optimallashtirish mumkin)
+  const filteredProducts = useMemo(() => {
+    if (!selectedProductCategory) { // Agar kategoriya tanlanmagan bo'lsa (bo'sh string)
+      return initialProducts;
+    }
+    return initialProducts.filter(
+      (product) => product.categoryId === parseInt(selectedProductCategory)
+    );
+  }, [selectedProductCategory, initialProducts]); // initialProducts o'zgarsa ham qayta hisoblansin
+
   return (
     <div className="flex h-screen bg-gray-100 font-sans">
+      {/* Sidebar */}
       <div className="flex flex-col w-64 bg-gray-800 text-white h-screen">
         <div className="flex items-center justify-center h-16 border-b border-gray-700">
           <span className="text-xl font-semibold">SmartResto Admin</span>
@@ -324,6 +365,7 @@ function Admin() {
         </button>
       </div>
 
+      {/* Content Area */}
       <div className="flex-1 flex flex-col overflow-hidden">
         <header className="flex justify-end items-center p-4 bg-white border-b h-16">
           <div className="flex items-center space-x-2 text-sm text-gray-600">
@@ -335,6 +377,7 @@ function Admin() {
           {activePage === 'dashboard' && (
             <div className="space-y-6">
               <h1 className="text-2xl font-semibold text-gray-800">Boshqaruv paneli</h1>
+              {/* Dashboard content */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 {[
                   { title: "Bugungi savdo", value: "0 so'm", change: "+100.0% vs o'tgan haftaga nisbatan", icon: FiDollarSign, changeType: "increase" },
@@ -497,9 +540,25 @@ function Admin() {
                         <h1 className="text-2xl font-semibold text-gray-800">Mahsulotlar ro'yxati</h1>
                         <p className="text-sm text-gray-500">Barcha mavjud mahsulotlar va ularning narxlari.</p>
                     </div>
-                    <div className="flex space-x-3">
+                    <div className="flex items-center space-x-3"> {/* items-center qo'shildi */}
+                        {/* 4. Select (dropdown) elementi */}
+                        <div className="flex items-center">
+                            <FiFilter className="mr-2 h-4 w-4 text-gray-600" />
+                            <select
+                                value={selectedProductCategory}
+                                onChange={(e) => setSelectedProductCategory(e.target.value)}
+                                className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                            >
+                                <option value="">Barcha Kategoriyalar</option>
+                                {initialCategories.map(category => (
+                                    <option key={category.id} value={String(category.id)}>
+                                        {category.nomi.charAt(0).toUpperCase() + category.nomi.slice(1)}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
                         <button className="flex items-center px-4 py-2 border rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"> <FiRefreshCw className="mr-2 h-4 w-4" /> Yangilash </button>
-                        <button onClick={() => setIsAddProductModalOpen(true)} className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700"> <FiPlus className="mr-2 h-4 w-4" /> Yangi mahsulot qo'shish </button>
+                        <button onClick={() => setIsAddProductModalOpen(true)} className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700"> <FiPlus className="mr-2 h-4 w-4" /> Yangi mahsulot </button>
                     </div>
                 </div>
                 <div className="bg-white rounded-lg shadow overflow-hidden">
@@ -507,15 +566,22 @@ function Admin() {
                         <table className="w-full text-sm text-left text-gray-600">
                             <thead className="text-xs text-gray-700 uppercase bg-gray-50">
                                 <tr>
-                                    <th scope="col" className="px-6 py-3">Mahsulot nomi</th><th scope="col" className="px-6 py-3">Narx</th>
-                                    <th scope="col" className="px-6 py-3">Miqdori</th><th scope="col" className="px-6 py-3 text-center">Amallar</th>
+                                    <th scope="col" className="px-6 py-3">Mahsulot nomi</th>
+                                    <th scope="col" className="px-6 py-3">Kategoriya</th> {/* Yangi ustun */}
+                                    <th scope="col" className="px-6 py-3">Narx</th>
+                                    <th scope="col" className="px-6 py-3">Miqdori</th>
+                                    <th scope="col" className="px-6 py-3 text-center">Amallar</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {initialProducts.map((prod) => (
+                                {filteredProducts.map((prod) => {
+                                    const categoryName = initialCategories.find(cat => cat.id === prod.categoryId)?.nomi || 'Noma\'lum';
+                                    return (
                                     <tr key={prod.id} className="bg-white border-b hover:bg-gray-50">
                                         <td className="px-6 py-4 font-medium text-gray-900">{prod.nomi}</td>
-                                        <td className="px-6 py-4">{prod.narx}</td><td className="px-6 py-4">{prod.miqdori}</td>
+                                        <td className="px-6 py-4 capitalize">{categoryName}</td> {/* Kategoriya nomi */}
+                                        <td className="px-6 py-4">{prod.narx}</td>
+                                        <td className="px-6 py-4">{prod.miqdori}</td>
                                         <td className="px-6 py-4 text-center">
                                             <div className="flex justify-center items-center space-x-3">
                                                 <button onClick={() => handleEdit('Mahsulot', prod.id)} className="text-blue-500 hover:text-blue-700" title="Tahrirlash"><FiEdit size={16} /></button>
@@ -523,15 +589,15 @@ function Admin() {
                                             </div>
                                         </td>
                                     </tr>
-                                ))}
-                                {initialProducts.length === 0 && ( <tr className="bg-white border-b"><td colSpan="4" className="px-6 py-10 text-center text-gray-500">Mahsulotlar mavjud emas.</td></tr> )}
+                                )})}
+                                {filteredProducts.length === 0 && ( <tr className="bg-white border-b"><td colSpan="5" className="px-6 py-10 text-center text-gray-500">Mahsulotlar mavjud emas {selectedProductCategory && "bu kategoriyada"}.</td></tr> )}
                             </tbody>
                         </table>
                     </div>
                 </div>
             </div>
           )}
-
+          
           {activePage === 'categories' && (
             <div className="space-y-6">
                 <div className="flex justify-between items-center">
@@ -541,7 +607,7 @@ function Admin() {
                     </div>
                     <div className="flex space-x-3">
                         <button className="flex items-center px-4 py-2 border rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"> <FiRefreshCw className="mr-2 h-4 w-4" /> Yangilash </button>
-                        <button onClick={() => setIsAddCategoryModalOpen(true)} className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700"> <FiPlus className="mr-2 h-4 w-4" /> Yangi kategoriya qo'shish </button>
+                        <button onClick={() => setIsAddCategoryModalOpen(true)} className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700"> <FiPlus className="mr-2 h-4 w-4" /> Yangi kategoriya </button>
                     </div>
                 </div>
                 <div className="bg-white rounded-lg shadow overflow-hidden">
@@ -668,10 +734,10 @@ function Admin() {
                  </form>
              </div>
           )}
-
         </main>
       </div>
 
+      {/* Modallar */}
       {isAddEmployeeModalOpen && (
           <div className="fixed inset-0 bg-gray-400 bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-lg shadow-xl w-full max-w-md border border-gray-200 relative">
@@ -731,6 +797,23 @@ function Admin() {
                       <div>
                         <label htmlFor="add_prod_name" className="block text-sm font-medium text-gray-700 mb-1">Nomi*</label>
                         <input type="text" id="add_prod_name" name="name" value={newProduct.name} onChange={handleInputChange(setNewProduct)} placeholder="Masalan: Lavash" required className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"/>
+                      </div>
+                       {/* Kategoriya tanlash uchun select */}
+                      <div>
+                        <label htmlFor="add_prod_category" className="block text-sm font-medium text-gray-700 mb-1">Kategoriya*</label>
+                        <select 
+                            id="add_prod_category" 
+                            name="categoryId" 
+                            value={newProduct.categoryId} 
+                            onChange={handleInputChange(setNewProduct)} 
+                            required 
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm bg-white"
+                        >
+                            <option value="" disabled>Kategoriyani tanlang</option>
+                            {initialCategories.map(cat => (
+                                <option key={cat.id} value={String(cat.id)} className="capitalize">{cat.nomi}</option>
+                            ))}
+                        </select>
                       </div>
                       <div>
                         <label htmlFor="add_prod_price" className="block text-sm font-medium text-gray-700 mb-1">Narx* (so'mda)</label>
@@ -861,6 +944,22 @@ function Admin() {
                                     <input type="text" id="edit_prod_nomi" name="nomi" value={editFormData.nomi || ''} onChange={handleEditInputChange} required className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"/>
                                 </div>
                                 <div>
+                                    <label htmlFor="edit_prod_category" className="block text-sm font-medium text-gray-700 mb-1">Kategoriya*</label>
+                                    <select 
+                                        id="edit_prod_category" 
+                                        name="categoryId" 
+                                        value={editFormData.categoryId || ''} 
+                                        onChange={handleEditInputChange} 
+                                        required 
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm bg-white"
+                                    >
+                                        <option value="" disabled>Kategoriyani tanlang</option>
+                                        {initialCategories.map(cat => (
+                                            <option key={cat.id} value={String(cat.id)} className="capitalize">{cat.nomi}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
                                     <label htmlFor="edit_prod_narx" className="block text-sm font-medium text-gray-700 mb-1">Narx* (so'mda)</label>
                                     <input type="text" id="edit_prod_narx" name="narx" value={(editFormData.narx || '').toString().replace(/\s*so'm/i, '')} onChange={handleEditInputChange} placeholder="25000.00" required className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"/>
                                 </div>
@@ -868,6 +967,7 @@ function Admin() {
                                     <label htmlFor="edit_prod_miqdori" className="block text-sm font-medium text-gray-700 mb-1">Miqdori*</label>
                                     <input type="number" id="edit_prod_miqdori" name="miqdori" value={editFormData.miqdori || ''} onChange={handleEditInputChange} placeholder="10" required className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"/>
                                 </div>
+                                {/* Mahsulot uchun 'Faol' toggle yo'q edi, qo'shish mumkin. Agar kerak bo'lsa, Xodimlar kabi toggle qo'shing. */}
                             </>
                         )}
                          {editingItem.type === 'Kategoriya' && (
